@@ -15,7 +15,7 @@ az keyvault create -n $key_vault_name -g $resource_group \
 
 # Grant access to keys and secrets for a user
 az keyvault set-policy --name $key_vault_name \
-  --upn "CaJoyce@contosohq.xyz" \
+  --upn "USER_PRINCIPAL_NAME" \
   --resource-group $resource_group \
   --secret-permissions get list set \
   --key-permissions get list create import
