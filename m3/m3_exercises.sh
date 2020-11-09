@@ -13,22 +13,38 @@ az group create -n $resource_group -l $location
 az keyvault create -n $key_vault_name -g $resource_group \
   -l $location --sku Standard
 
-# Grant access to keys and secrets for a user
-az keyvault set-policy --name $key_vault_name \
-  --upn "USER_PRINCIPAL_NAME" \
-  --resource-group $resource_group \
-  --secret-permissions get list set \
-  --key-permissions get list create import
+# Create a secret in Key Vault
+expire=$(date -d "$(date --utc) +1 year" +%Y-%m-%d'T'%T'Z')
+not_before=$(date -d "$(date --utc) +1 month" +%Y-%m-%d'T'%T'Z')
 
-# Configure Key Vault Firewall Policies
+az keyvault secret set --vault-name $key_vault_name \
+  --name "TopSecret" \
+  --not-before $not_before \
+  --expires $expire \
+  --value 'QWERTyhnbV^54rtyhU&*76tgbnji*&6yh'
 
-# Get your public IP address
-resp=$(curl https://ifconfig.me/ip)
+# Now let's update the secret value
+az keyvault secret set --vault-name $key_vault_name \
+  --name "TopSecret" \
+  --not-before $not_before \
+  --expires $expire \
+  --value 'NBVGhji876tGBVFR567*IJHGT^%yhgt5(&YHJHY&'
 
-az keyvault update --name $key_vault_name \
-  --resource-group $resource_group \
-  --set properties.networkAcls.bypass=AzureServices \
-    properties.networkAcls.defaultAction=Deny
+# List all versions of the secret
+az keyvault secret list-versions \
+  --name "TopSecret" --vault-name $key_vault_name
 
-az keyvault network-rule add --name $key_vault_name \
-  --resource-group $resource_group --ip-address $resp
+# Create a self-signed certificate
+az keyvault certificate create --vault-name $key_vault_name \
+  --name "SurfingCow-www-cert" \
+  --policy @cert_policy.json
+
+cert=$(az keyvault certificate show --vault-name $key_vault_name \
+  --name "SurfingCow-www-cert")
+
+key_id=$(echo $cert | jq .kid -r)
+secret_id=$(echo $cert | jq .sid -r)
+
+az keyvault key show --id $key_id
+
+az keyvault secret show --id $secret_id

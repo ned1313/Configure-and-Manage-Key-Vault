@@ -27,38 +27,29 @@ $keyVaultParameters = @{
 
 $keyVault = New-AzKeyVault @keyVaultParameters
 
-$keyVault | Format-List
+# Grant access to keys and secrets for a user
 
-# Assign Key Vault Contributor to an existing user
-
-Get-AzRoleDefinition -Name "Key Vault Contributor"
-
-$assignmentInfo = @{
-    SignInName = "USER_PRINCIPAL_NAME"
-    Scope = $keyVault.ResourceId
-    RoleDefinitionName = "Key Vault Contributor"
+$accessPolicySettings = @{
+    VaultName = $keyVault.VaultName
+    ResourceGroupName = $keyVault.ResourceGroupName
+    PermissionsToSecrets = @("get","list","set")
+    PermissionsToKeys = @("get","list","create","import")
+    UserPrincipalName = "USER_PRINCIPAL_NAME"
 }
 
-New-AzRoleAssignment @assignmentInfo
+Set-AzKeyVaultAccessPolicy @accessPolicySettings
 
-#Create a new custom role definition for Key Vault
-$subId = (Get-AzContext).Subscription.Id
+# Configure Key Vault Firewall Policies
 
-$roleInfo = Get-Content .\custom_role.json
+# Get your public IP address
+$resp = Invoke-WebRequest -Uri "https://ifconfig.me/ip"
 
-$roleInfo -replace "SUBSCRIPTION_ID",$subId > updated_role.json
-
-$role = New-AzRoleDefinition -InputFile .\updated_role.json
-
-#Assign the custom role to an existing user
-$user = Get-AzADUser -UserPrincipalName "USER_PRINCIPAL_NAME"
-
-$assignmentInfo = @{
-    ObjectId = $user.Id
-    Scope = $keyVault.ResourceId
-    RoleDefinitionId = $role.Id
+$networkRuleSettings = @{
+    DefaultAction = "Deny"
+    Bypass = "AzureServices"
+    VaultName = $keyVault.VaultName
+    ResourceGroupName = $keyVault.ResourceGroupName
+    IpAddressRange = $resp.Content
 }
 
-New-AzRoleAssignment @assignmentInfo
-
-Get-AzRoleAssignment -Scope $keyVault.ResourceId
+Update-AzKeyVaultNetworkRuleSet @networkRuleSettings

@@ -27,6 +27,58 @@ $keyVaultParameters = @{
 
 $keyVault = New-AzKeyVault @keyVaultParameters
 
+#######################################################
+# STORAGE ACCCOUNT EXERCISE
+#######################################################
+
+#Create a new storage account
+$saAccountParameters = @{
+    Name = "$($prefix)sa$id"
+    ResourceGroupName = $keyVaultGroup.ResourceGroupName
+    Location = $location
+    SkuName = "Standard_LRS"
+}
+
+$storageAccount = New-AzStorageAccount @saAccountParameters
+
+Get-AzStorageAccountKey -ResourceGroupName $storageAccount.ResourceGroupName -Name $storageAccount.StorageAccountName
+
+# Grant the Key Vault App Id the permissions on the storage account
+
+$roleAssignment = @{
+    ApplicationId = "cfa8b339-82a2-471a-a3c9-0fc0be7a4093"
+    RoleDefinitionName = 'Storage Account Key Operator Service Role'
+    Scope = $storageAccount.Id
+}
+
+New-AzRoleAssignment @roleAssignment
+
+# Add your storage account to your Key Vault's managed storage accounts
+$managedStorageAccount = @{
+    VaultName = $keyVault.VaultName
+    AccountName = $storageAccount.StorageAccountName
+    AccountResourceId = $storageAccount.Id
+    ActiveKeyName = "key1"
+    RegenerationPeriod = [System.Timespan]::FromDays(90)
+}
+
+Add-AzKeyVaultManagedStorageAccount @managedStorageAccount
+
+Get-AzKeyVaultManagedStorageAccount -VaultName $keyVault.VaultName
+
+# Regenerate the key
+$updateKeyParams = @{
+    VaultName = $keyVault.VaultName
+    AccountName = $storageAccount.StorageAccountName
+    KeyName = "key1"
+}
+
+Update-AzKeyVaultManagedStorageAccountKey @updateKeyParams
+
+#######################################################
+# SOFT-DELETE AND PURGE EXERCISE
+#######################################################
+
 # Create a secret in Key Vault
 
 $SecureStringValue = ConvertTo-SecureString -String 'QWERTyhnbV^54rtyhU&*76tgbnji*&6yh' -AsPlainText -Force
@@ -42,37 +94,70 @@ $secretParams = @{
 
 Set-AzKeyVaultSecret @secretParams
 
-# Now let's update the secret value
-$SecureStringValue = ConvertTo-SecureString -String 'NBVGhji876tGBVFR567*IJHGT^%yhgt5(&YHJHY&' -AsPlainText -Force
+# Delete the secret
 
-$secretParams = @{
-  VaultName = $keyVault.VaultName
-  Name = "TopSecret"
-  SecretValue = $SecureStringValue
+Remove-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "TopSecret" -Force
+
+# Recover the secret
+
+Get-AzKeyVaultSecret $keyVault.VaultName -InRemovedState
+
+Undo-AzKeyVaultSecretRemoval -VaultName $keyVault.VaultName -Name "TopSecret"
+
+# Delete the secret
+
+Remove-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "TopSecret" -Force
+
+# Purge the secret - requires special permission!
+
+Remove-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "TopSecret" -InRemovedState -Force
+
+# Enable purge protection
+
+$updateKeyVault = @{
+    ResourceGroupName = $keyVaultGroup.ResourceGroupName
+    VaultName = $keyVault.VaultName
+    EnablePurgeProtection = $true
 }
+
+Update-AzKeyVault @updateKeyVault
+
+#######################################################
+# BACKUP AND RECOVER EXERCISE
+#######################################################
+
+# Recreate the secret
 
 Set-AzKeyVaultSecret @secretParams
 
-Get-AzKeyVaultSecret -VaultName $keyvault.VaultName -Name "TopSecret" -IncludeVersions
+# Backup the secret locally
 
-# Create a self-signed certificate
-$policyParams = @{
-  SecretContentType = "application/x-pkcs12"
-  SubjectName = "CN=www.surfingcow.xyz"
-  IssuerName = "Self"
-  ValidityInMonths = 12
-}
-$Policy = New-AzKeyVaultCertificatePolicy @policyParams
-
-$certParams = @{
+$backupParams = @{
   VaultName = $keyVault.VaultName
-  Name = "SurfingCow-www-cert"
-  CertificatePolicy = $Policy
+  Name = "TopSecret"
+  OutputFile = "TopSecret.bkp"
 }
-Add-AzKeyVaultCertificate @certParams
 
-Get-AzKeyVaultCertificate -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
+Backup-AzKeyVaultSecret @backupParams
 
-Get-AzKeyVaultKey -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
+Get-Content .\TopSecret.bkp
 
-Get-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
+# Create a new Key Vault in another region
+
+$location = "westus"
+$id++
+
+#Create a resource group for Key Vault
+$keyVaultGroup = New-AzResourceGroup -Name "$prefix-key-vault-$id" -Location $location
+
+#Create a new Key Vault
+$keyVaultParameters = @{
+    Name = "$prefix-key-vault-$id"
+    ResourceGroupName = $keyVaultGroup.ResourceGroupName
+    Location = $location
+    Sku = "Standard"
+}
+
+$keyVault2 = New-AzKeyVault @keyVaultParameters
+
+Restore-AzKeyVaultSecret -VaultName $keyVault2.VaultName -InputFile .\TopSecret.bkp

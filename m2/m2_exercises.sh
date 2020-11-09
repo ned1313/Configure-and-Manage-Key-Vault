@@ -13,24 +13,22 @@ az group create -n $resource_group -l $location
 az keyvault create -n $key_vault_name -g $resource_group \
   -l $location --sku Standard
 
-# Assign Key Vault Contributor to an existing user
+# Grant access to keys and secrets for a user
+az keyvault set-policy --name $key_vault_name \
+  --upn "USER_PRINCIPAL_NAME" \
+  --resource-group $resource_group \
+  --secret-permissions get list set \
+  --key-permissions get list create import
 
-az role definition list --name "Key Vault Contributor"
+# Configure Key Vault Firewall Policies
 
-vaultId=$(az keyvault show -g $resource_group -n $key_vault_name | jq -r .id)
+# Get your public IP address
+resp=$(curl https://ifconfig.me/ip)
 
-az role assignment create --role "Key Vault Contributor" \
-  --assignee "USER_PRINCIPAL_NAME" --scope $vaultId
+az keyvault update --name $key_vault_name \
+  --resource-group $resource_group \
+  --set properties.networkAcls.bypass=AzureServices \
+    properties.networkAcls.defaultAction=Deny
 
-#Get the current subscription ID and create the custom role json
-subId=$(az account show | jq -r .id)
-sed s/SUBSCRIPTION_ID/$subId/g custom_role.json > updated_role.json
-
-#Get the role ID, vault ID, and user ID
-role=$(az role definition create --role-definition updated_role.json)
-user=$(az ad user show  --id "CaJoyce@contosohq.xyz" | jq -r .objectId)
-
-#Assign the role to the user with the vault as the scope
-az role assignment create --role "Secret Reader" \
-  --assignee $user --scope $vaultId
-
+az keyvault network-rule add --name $key_vault_name \
+  --resource-group $resource_group --ip-address $resp

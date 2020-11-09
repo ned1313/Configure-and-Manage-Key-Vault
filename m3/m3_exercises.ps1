@@ -27,29 +27,52 @@ $keyVaultParameters = @{
 
 $keyVault = New-AzKeyVault @keyVaultParameters
 
-# Grant access to keys and secrets for a user
+# Create a secret in Key Vault
 
-$accessPolicySettings = @{
-    VaultName = $keyVault.VaultName
-    ResourceGroupName = $keyVault.ResourceGroupName
-    PermissionsToSecrets = @("get","list","set")
-    PermissionsToKeys = @("get","list","create","import")
-    UserPrincipalName = "USER_PRINCIPAL_NAME"
+$SecureStringValue = ConvertTo-SecureString -String 'QWERTyhnbV^54rtyhU&*76tgbnji*&6yh' -AsPlainText -Force
+
+$secretParams = @{
+  VaultName = $keyVault.VaultName
+  Name = "TopSecret"
+  SecretValue = $SecureStringValue
+  NotBefore = (Get-Date).AddDays(30).ToUniversalTime()
+  Expires = (Get-Date).AddYears(1).ToUniversalTime()
+  ContentType = "API-Key"
 }
 
-Set-AzKeyVaultAccessPolicy @accessPolicySettings
+Set-AzKeyVaultSecret @secretParams
 
-# Configure Key Vault Firewall Policies
+# Now let's update the secret value
+$SecureStringValue = ConvertTo-SecureString -String 'NBVGhji876tGBVFR567*IJHGT^%yhgt5(&YHJHY&' -AsPlainText -Force
 
-# Get your public IP address
-$resp = Invoke-WebRequest -Uri "https://ifconfig.me/ip"
-
-$networkRuleSettings = @{
-    DefaultAction = "Deny"
-    Bypass = "AzureServices"
-    VaultName = $keyVault.VaultName
-    ResourceGroupName = $keyVault.ResourceGroupName
-    IpAddressRange = $resp.Content
+$secretParams = @{
+  VaultName = $keyVault.VaultName
+  Name = "TopSecret"
+  SecretValue = $SecureStringValue
 }
 
-Update-AzKeyVaultNetworkRuleSet @networkRuleSettings
+Set-AzKeyVaultSecret @secretParams
+
+Get-AzKeyVaultSecret -VaultName $keyvault.VaultName -Name "TopSecret" -IncludeVersions
+
+# Create a self-signed certificate
+$policyParams = @{
+  SecretContentType = "application/x-pkcs12"
+  SubjectName = "CN=www.surfingcow.xyz"
+  IssuerName = "Self"
+  ValidityInMonths = 12
+}
+$Policy = New-AzKeyVaultCertificatePolicy @policyParams
+
+$certParams = @{
+  VaultName = $keyVault.VaultName
+  Name = "SurfingCow-www-cert"
+  CertificatePolicy = $Policy
+}
+Add-AzKeyVaultCertificate @certParams
+
+Get-AzKeyVaultCertificate -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
+
+Get-AzKeyVaultKey -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
+
+Get-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "SurfingCow-www-cert"
