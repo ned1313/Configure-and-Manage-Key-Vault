@@ -27,6 +27,19 @@ $keyVaultParameters = @{
 
 $keyVault = New-AzKeyVault @keyVaultParameters
 
+# Create a key in Key Vault
+
+$keyParams = @{
+  VaultName = $keyVault.VaultName
+  Name = "RSAKey"
+  Destination = "Software"
+  Expires = (Get-Date).AddYears(1).ToUniversalTime()
+  KeyOps = @("decrypt","encrypt")
+}
+
+Add-AzKeyVaultKey @keyParams
+
+
 # Create a secret in Key Vault
 
 $SecureStringValue = ConvertTo-SecureString -String 'QWERTyhnbV^54rtyhU&*76tgbnji*&6yh' -AsPlainText -Force

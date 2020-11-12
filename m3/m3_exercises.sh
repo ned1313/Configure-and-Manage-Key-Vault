@@ -13,6 +13,15 @@ az group create -n $resource_group -l $location
 az keyvault create -n $key_vault_name -g $resource_group \
   -l $location --sku Standard
 
+# Create a key in Key Vault
+expire=$(date -d "$(date --utc) +1 year" +%Y-%m-%d'T'%T'Z')
+
+az keyvault key create --vault-name $key_vault_name \
+  --expires $expire \
+  --kty RSA \
+  --name 'RSAKey' \
+  --ops decrypt encrypt
+
 # Create a secret in Key Vault
 expire=$(date -d "$(date --utc) +1 year" +%Y-%m-%d'T'%T'Z')
 not_before=$(date -d "$(date --utc) +1 month" +%Y-%m-%d'T'%T'Z')
