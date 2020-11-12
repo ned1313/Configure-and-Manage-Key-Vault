@@ -34,7 +34,7 @@ $keyVault = New-AzKeyVault @keyVaultParameters
 #Create a new storage account
 $saAccountParameters = @{
     Name = "$($prefix)sa$id"
-    ResourceGroupName = $keyVaultGroup.ResourceGroupName
+    ResourceGroupName = $keyVault.ResourceGroupName
     Location = $location
     SkuName = "Standard_LRS"
 }
@@ -115,7 +115,7 @@ Remove-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name "TopSecret" -InRemo
 # Enable purge protection
 
 $updateKeyVault = @{
-    ResourceGroupName = $keyVaultGroup.ResourceGroupName
+    ResourceGroupName = $keyVault.ResourceGroupName
     VaultName = $keyVault.VaultName
     EnablePurgeProtection = $true
 }
